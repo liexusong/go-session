@@ -25,12 +25,16 @@ type Config struct {
 }
 
 type SessionHandlers interface {
-	SessionStart(Config, string) error
 	SessionGet(string) ([]byte, error)
 	SessionSet(string, []byte) error
 	SessionDel(string) error
 	SessionDestory() error
 	SessionGC()
+}
+
+type SessionManagerHandlers interface {
+	CreateSession(string) SessionHandlers
+	GetReconnects() int
 }
 
 type Session struct {
@@ -40,44 +44,58 @@ type Session struct {
 	handlers SessionHandlers
 }
 
-var defaultNewSessionHandlersFunc func() SessionHandlers
-
-func SessionRegisterHandlers(newHandlersFunc func() SessionHandlers) {
-	defaultNewSessionHandlersFunc = newHandlersFunc
+type SessionManager struct {
+	config   Config
+	handlers SessionManagerHandlers
 }
 
-func NewSession(w http.ResponseWriter, r *http.Request, config Config) (*Session, error) {
-	cookie, err := r.Cookie(config.SessionName)
+var defaultNewSessionManagerFunc func(Config) (SessionManagerHandlers, error)
+
+func SessionRegisterHandlers(manager func(Config) (SessionManagerHandlers, error)) {
+	defaultNewSessionManagerFunc = manager
+}
+
+func NewSessionManager(config Config) (*SessionManager, error) {
+	handlers, err := defaultNewSessionManagerFunc(config)
 	if err != nil {
 		return nil, err
 	}
 
-	sid := cookie.Value
-	if sid == "" {
+	return &SessionManager{
+		config:   config,
+		handlers: handlers,
+	}, nil
+}
+
+func (m *SessionManager) CreateSession(w http.ResponseWriter, r *http.Request) *Session {
+	var sid string
+
+	cookie, err := r.Cookie(m.config.SessionName)
+
+	if err != nil || cookie.Value == "" {
 		sid = createSid()
 		http.SetCookie(w, &http.Cookie{
-			Name:   config.SessionName,
+			Name:   m.config.SessionName,
 			Value:  sid,
-			Domain: config.CookieDomain,
-			MaxAge: config.CookieLifetime,
+			Domain: m.config.CookieDomain,
+			MaxAge: m.config.CookieLifetime,
 		})
+	} else {
+		sid = cookie.Value
 	}
 
-	handlers := defaultNewSessionHandlersFunc()
+	handlers := m.handlers.CreateSession(sid)
 
-	err = handlers.SessionStart(config, sid)
-	if err != nil {
-		return nil, err
-	}
-
-	ret := &Session{
+	return &Session{
 		response: w,
 		request:  r,
 		sid:      sid,
 		handlers: handlers,
 	}
+}
 
-	return ret, nil
+func (m *SessionManager) GetReconnects() int {
+	return m.handlers.GetReconnects()
 }
 
 func (s *Session) Get(name interface{}, value interface{}) error {

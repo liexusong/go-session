@@ -4,39 +4,45 @@ Usage:
 ```go
 package main
 
-import(
-	_ "github.com/liexusong/go-session/redis"
-	session "github.com/liexusong/go-session"
-	"net/http"
+import (
+	"fmt"
 	"log"
+	"net/http"
+
+	session "github.com/liexusong/go-session"
+	_ "github.com/liexusong/go-session/redis"
 )
 
-var sessionConfig = &session.Config{
-    SavePath:       "tcp://127.0.0.1:6379",
-    SessionName:    "session_id",
-    CookieDomain:   "test.com",
-    CookieLifetime: 0,
-    GCProbability:  1,
-    GCDivisor:      1,
-    GCMaxLifetime:  100,
+var sessionConfig = session.Config{
+	SavePath:       "tcp://127.0.0.1:6379",
+	SessionName:    "session_id",
+	CookieDomain:   "localhost",
+	CookieLifetime: 0,
+	GCProbability:  1,
+	GCDivisor:      1,
+	GCMaxLifetime:  100,
 }
 
-func SessionTestHandler(w http.ResponseWriter, r *http.Request) {
-	se, err := session.NewSession(w, r, sessionConfig)
+var sessionManager *session.SessionManager
+
+func setSessionHandler(w http.ResponseWriter, r *http.Request) {
+	se := sessionManager.CreateSession(w, r)
+
+	err := se.Set("name", "liexusong")
 	if err != nil {
 		w.Write([]byte(err.Error()))
 		return
 	}
 
-	err = se.Set("name", "liexusong")
-	if err != nil {
-		w.Write([]byte(err.Error()))
-		return
-	}
+	w.Write([]byte("OK"))
+}
+
+func getSessionHandler(w http.ResponseWriter, r *http.Request) {
+	se := sessionManager.CreateSession(w, r)
 
 	var name string
 
-	err = se.Get("name", &name)
+	err := se.Get("name", &name)
 	if err != nil {
 		w.Write([]byte(err.Error()))
 		return
@@ -46,11 +52,20 @@ func SessionTestHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-    http.HandleFunc("/", SessionTestHandler)
+	var err error
 
-    err := http.ListenAndServe(":8080", nil)
-    if err != nil {
-        log.Fatal("ListenAndServe: ", err)
-    }
+	sessionManager, err = session.NewSessionManager(sessionConfig)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	http.HandleFunc("/set", setSessionHandler)
+	http.HandleFunc("/get", getSessionHandler)
+
+	err = http.ListenAndServe(":8080", nil)
+	if err != nil {
+		log.Fatal("ListenAndServe: ", err)
+	}
 }
 ```

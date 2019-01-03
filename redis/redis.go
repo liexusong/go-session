@@ -3,65 +3,136 @@ package redis
 import (
 	"errors"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/garyburd/redigo/redis"
 	session "github.com/liexusong/go-session"
 )
 
+type RedisSessionManager struct {
+	config         session.Config
+	redisConn      redis.Conn
+	locker         *sync.RWMutex
+	reconnectTimes int
+}
+
 type RedisSession struct {
-	conn          redis.Conn
-	isActive      bool
 	sid           string
+	manager       *RedisSessionManager
 	GCProbability int
 	GCDivisor     int
 	GCMaxLifetime int
 }
 
+var redisOptions = []redis.DialOption{
+	redis.DialConnectTimeout(time.Duration(5) * time.Second),
+	redis.DialReadTimeout(time.Duration(5) * time.Second),
+	redis.DialWriteTimeout(time.Duration(5) * time.Second),
+}
+
 func init() {
-	session.SessionRegisterHandlers(NewSessionHandlers)
+	session.SessionRegisterHandlers(NewSessionManagerHandlers)
 }
 
-func NewSessionHandlers() session.SessionHandlers {
-	return &RedisSession{}
-}
-
-func (s *RedisSession) SessionStart(config session.Config, sid string) error {
-	if s.isActive {
-		return nil
-	}
-
+func NewSessionManagerHandlers(config session.Config) (session.SessionManagerHandlers, error) {
 	idx := strings.Index(config.SavePath, "://")
 	if idx < 0 {
-		return errors.New("configure is invalid")
+		return nil, errors.New("configure is invalid")
 	}
-
-	var redisConn redis.Conn
 
 	network := config.SavePath[:idx]
 	address := config.SavePath[idx+3:]
 
-	redisConn, err := redis.Dial(network, address)
+	redisConn, err := redis.Dial(network, address, redisOptions...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	s.conn = redisConn
-	s.isActive = true
-	s.sid = sid
-	s.GCMaxLifetime = config.GCMaxLifetime
-	s.GCProbability = config.GCProbability
-	s.GCDivisor = config.GCDivisor
+	manager := &RedisSessionManager{
+		config:    config,
+		redisConn: redisConn,
+		locker:    new(sync.RWMutex),
+	}
 
-	return nil
+	go manager.checkRedisConnectAlive()
+
+	return manager, nil
+}
+
+func (m *RedisSessionManager) reconnect() {
+	idx := strings.Index(m.config.SavePath, "://")
+
+	network := m.config.SavePath[:idx]
+	address := m.config.SavePath[idx+3:]
+
+	redisConn, err := redis.Dial(network, address, redisOptions...)
+	if err != nil {
+		return
+	}
+
+	m.locker.Lock()
+	defer m.locker.Unlock()
+
+	m.redisConn.Close()
+
+	m.redisConn = redisConn
+	m.reconnectTimes++
+}
+
+func (m *RedisSessionManager) checkRedisConnectAlive() {
+	for {
+		m.locker.RLock()
+
+		retries := 0
+
+	tryAgain:
+		_, err := redis.String(m.redisConn.Do("PING"))
+		if err != nil {
+			retries++
+			if retries > 10 {
+				m.locker.RUnlock()
+				m.reconnect()
+				goto nextTime
+			}
+			goto tryAgain
+		}
+
+		m.locker.RUnlock()
+
+	nextTime:
+		time.Sleep(time.Second)
+	}
+}
+
+func (m *RedisSessionManager) CreateSession(sid string) session.SessionHandlers {
+	return &RedisSession{
+		sid:           sid,
+		manager:       m,
+		GCProbability: m.config.GCProbability,
+		GCDivisor:     m.config.GCDivisor,
+		GCMaxLifetime: m.config.GCMaxLifetime,
+	}
+}
+
+func (m *RedisSessionManager) GetReconnects() int {
+	return m.reconnectTimes
+}
+
+func (m *RedisSessionManager) doCommand(cmd string, args ...interface{}) (interface{}, error) {
+	m.locker.RLock()
+	defer m.locker.RUnlock()
+
+	return m.redisConn.Do(cmd, args...)
 }
 
 func (s *RedisSession) updateSessionGCMaxLifetime() error {
-	_, err := s.conn.Do("EXPIRE", s.sid, s.GCMaxLifetime)
+	_, err := s.manager.redisConn.Do("EXPIRE", s.sid, s.GCMaxLifetime)
 	return err
 }
 
 func (s *RedisSession) SessionGet(name string) ([]byte, error) {
-	buffer, err := redis.Bytes(s.conn.Do("HGET", s.sid, name))
+	buffer, err := redis.Bytes(s.manager.doCommand("HGET", s.sid, name))
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +143,7 @@ func (s *RedisSession) SessionGet(name string) ([]byte, error) {
 }
 
 func (s *RedisSession) SessionSet(name string, value []byte) error {
-	_, err := s.conn.Do("HSET", s.sid, name, value)
+	_, err := s.manager.doCommand("HSET", s.sid, name, value)
 	if err != nil {
 		return err
 	}
@@ -83,7 +154,7 @@ func (s *RedisSession) SessionSet(name string, value []byte) error {
 }
 
 func (s *RedisSession) SessionDel(name string) error {
-	_, err := s.conn.Do("HDEL", s.sid, name)
+	_, err := s.manager.doCommand("HDEL", s.sid, name)
 	if err != nil {
 		return err
 	}
@@ -94,24 +165,8 @@ func (s *RedisSession) SessionDel(name string) error {
 }
 
 func (s *RedisSession) SessionDestory() error {
-	if !s.isActive {
-		return nil
-	}
-
-	_, err := s.conn.Do("DEL", s.sid)
-	if err != nil {
-		return err
-	}
-
-	err = s.conn.Close()
-	if err != nil {
-		return err
-	}
-
-	s.conn = nil
-	s.isActive = false
-
-	return nil
+	_, err := s.manager.doCommand("DEL", s.sid)
+	return err
 }
 
 func (s *RedisSession) SessionGC() {
