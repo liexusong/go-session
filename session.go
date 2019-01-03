@@ -26,9 +26,9 @@ type Config struct {
 
 type SessionHandlers interface {
 	SessionStart(Config, string) error
-	SessionGet(interface{}, interface{}) error
-	SessionSet(interface{}, interface{}) error
-	SessionDel(interface{}) error
+	SessionGet(string) ([]byte, error)
+	SessionSet(string, []byte) error
+	SessionDel(string) error
 	SessionDestory() error
 	SessionGC()
 }
@@ -81,15 +81,25 @@ func NewSession(w http.ResponseWriter, r *http.Request, config Config) (*Session
 }
 
 func (s *Session) Get(name interface{}, value interface{}) error {
-	return s.handlers.SessionGet(name, value)
+	buffer, err := s.handlers.SessionGet(encodeName(name))
+	if err != nil {
+		return err
+	}
+
+	return decodeValue(buffer, value)
 }
 
 func (s *Session) Set(name interface{}, value interface{}) error {
-	return s.handlers.SessionSet(name, value)
+	realValue, err := encodeValue(value)
+	if err != nil {
+		return err
+	}
+
+	return s.handlers.SessionSet(encodeName(name), realValue)
 }
 
 func (s *Session) Del(name interface{}) error {
-	return s.handlers.SessionDel(name)
+	return s.handlers.SessionDel(encodeName(name))
 }
 
 func (s *Session) Destory() error {
@@ -104,11 +114,11 @@ func (s *Session) GetSid() string {
 	return s.sid
 }
 
-func SessionEncodeName(name interface{}) string {
+func encodeName(name interface{}) string {
 	return fmt.Sprintf("%v", name)
 }
 
-func SessionEncodeValue(value interface{}) ([]byte, error) {
+func encodeValue(value interface{}) ([]byte, error) {
 	writer := &bytes.Buffer{}
 
 	err := gob.NewEncoder(writer).Encode(value)
@@ -119,7 +129,7 @@ func SessionEncodeValue(value interface{}) ([]byte, error) {
 	return writer.Bytes(), nil
 }
 
-func SessionDecodeValue(buffer []byte, value interface{}) error {
+func decodeValue(buffer []byte, value interface{}) error {
 	return gob.NewDecoder(bytes.NewReader(buffer)).Decode(value)
 }
 

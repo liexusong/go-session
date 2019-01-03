@@ -60,47 +60,37 @@ func (s *RedisSession) updateSessionGCMaxLifetime() error {
 	return err
 }
 
-func (s *RedisSession) SessionGet(name interface{}, value interface{}) error {
-	realName := session.SessionEncodeName(name)
-
-	buffer, err := redis.Bytes(s.conn.Do("HGET", s.sid, realName))
+func (s *RedisSession) SessionGet(name string) ([]byte, error) {
+	buffer, err := redis.Bytes(s.conn.Do("HGET", s.sid, name))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = session.SessionDecodeValue(buffer, value)
-	if err != nil {
-		return err
-	}
+	_ = s.updateSessionGCMaxLifetime()
 
-	return s.updateSessionGCMaxLifetime()
+	return buffer, nil
 }
 
-func (s *RedisSession) SessionSet(name interface{}, value interface{}) error {
-	realName := session.SessionEncodeName(name)
-
-	realValue, err := session.SessionEncodeValue(value)
+func (s *RedisSession) SessionSet(name string, value []byte) error {
+	_, err := s.conn.Do("HSET", s.sid, name, value)
 	if err != nil {
 		return err
 	}
 
-	_, err = s.conn.Do("HSET", s.sid, realName, realValue)
-	if err != nil {
-		return err
-	}
+	_ = s.updateSessionGCMaxLifetime()
 
-	return s.updateSessionGCMaxLifetime()
+	return nil
 }
 
-func (s *RedisSession) SessionDel(name interface{}) error {
-	realName := session.SessionEncodeName(name)
-
-	_, err := s.conn.Do("HDEL", s.sid, realName)
+func (s *RedisSession) SessionDel(name string) error {
+	_, err := s.conn.Do("HDEL", s.sid, name)
 	if err != nil {
 		return err
 	}
 
-	return s.updateSessionGCMaxLifetime()
+	_ = s.updateSessionGCMaxLifetime()
+
+	return nil
 }
 
 func (s *RedisSession) SessionDestory() error {
