@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -14,7 +15,7 @@ type RedisSessionManager struct {
 	config         session.Config
 	redisConn      redis.Conn
 	locker         *sync.RWMutex
-	reconnectTimes int
+	reconnectTimes int64
 }
 
 type RedisSession struct {
@@ -61,6 +62,8 @@ func NewSessionManagerHandlers(config session.Config) (session.SessionManagerHan
 }
 
 func (m *RedisSessionManager) reconnect() {
+	atomic.AddInt64(&m.reconnectTimes, int64(1))
+
 	idx := strings.Index(m.config.SavePath, "://")
 
 	network := m.config.SavePath[:idx]
@@ -77,7 +80,6 @@ func (m *RedisSessionManager) reconnect() {
 	m.redisConn.Close()
 
 	m.redisConn = redisConn
-	m.reconnectTimes++
 }
 
 func (m *RedisSessionManager) checkRedisConnectAlive() {
@@ -115,8 +117,8 @@ func (m *RedisSessionManager) CreateSession(sid string) session.SessionHandlers 
 	}
 }
 
-func (m *RedisSessionManager) GetReconnects() int {
-	return m.reconnectTimes
+func (m *RedisSessionManager) GetReconnects() int64 {
+	return atomic.LoadInt64(&m.reconnectTimes)
 }
 
 func (m *RedisSessionManager) doCommand(cmd string, args ...interface{}) (interface{}, error) {

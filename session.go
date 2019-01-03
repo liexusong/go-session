@@ -34,7 +34,7 @@ type SessionHandlers interface {
 
 type SessionManagerHandlers interface {
 	CreateSession(string) SessionHandlers
-	GetReconnects() int
+	GetReconnects() int64
 }
 
 type Session struct {
@@ -94,7 +94,7 @@ func (m *SessionManager) CreateSession(w http.ResponseWriter, r *http.Request) *
 	}
 }
 
-func (m *SessionManager) GetReconnects() int {
+func (m *SessionManager) GetReconnects() int64 {
 	return m.handlers.GetReconnects()
 }
 
