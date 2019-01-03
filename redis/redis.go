@@ -11,7 +11,7 @@ import (
 type RedisSession struct {
 	conn          redis.Conn
 	isActive      bool
-	sessionId     string
+	sid           string
 	GCProbability int
 	GCDivisor     int
 	GCMaxLifetime int
@@ -25,7 +25,7 @@ func NewSessionHandlers() session.SessionHandlers {
 	return &RedisSession{}
 }
 
-func (s *RedisSession) SessionStart(config session.Config, sessionId string) error {
+func (s *RedisSession) SessionStart(config session.Config, sid string) error {
 	if s.isActive {
 		return nil
 	}
@@ -47,7 +47,7 @@ func (s *RedisSession) SessionStart(config session.Config, sessionId string) err
 
 	s.conn = redisConn
 	s.isActive = true
-	s.sessionId = sessionId
+	s.sid = sid
 	s.GCMaxLifetime = config.GCMaxLifetime
 	s.GCProbability = config.GCProbability
 	s.GCDivisor = config.GCDivisor
@@ -56,14 +56,14 @@ func (s *RedisSession) SessionStart(config session.Config, sessionId string) err
 }
 
 func (s *RedisSession) updateSessionGCMaxLifetime() error {
-	_, err := s.conn.Do("EXPIRE", s.sessionId, s.GCMaxLifetime)
+	_, err := s.conn.Do("EXPIRE", s.sid, s.GCMaxLifetime)
 	return err
 }
 
 func (s *RedisSession) SessionGet(name interface{}, value interface{}) error {
 	realName := session.SessionEncodeName(name)
 
-	buffer, err := redis.Bytes(s.conn.Do("HGET", s.sessionId, realName))
+	buffer, err := redis.Bytes(s.conn.Do("HGET", s.sid, realName))
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (s *RedisSession) SessionSet(name interface{}, value interface{}) error {
 		return err
 	}
 
-	_, err = s.conn.Do("HSET", s.sessionId, realName, realValue)
+	_, err = s.conn.Do("HSET", s.sid, realName, realValue)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (s *RedisSession) SessionSet(name interface{}, value interface{}) error {
 func (s *RedisSession) SessionDel(name interface{}) error {
 	realName := session.SessionEncodeName(name)
 
-	_, err := s.conn.Do("HDEL", s.sessionId, realName)
+	_, err := s.conn.Do("HDEL", s.sid, realName)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (s *RedisSession) SessionDestory() error {
 		return nil
 	}
 
-	_, err := s.conn.Do("DEL", s.sessionId)
+	_, err := s.conn.Do("DEL", s.sid)
 	if err != nil {
 		return err
 	}

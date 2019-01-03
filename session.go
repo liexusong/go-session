@@ -30,10 +30,10 @@ type SessionHandlers interface {
 }
 
 type Session struct {
-	response  http.ResponseWriter
-	request   *http.Request
-	sessionId string
-	handlers  SessionHandlers
+	response http.ResponseWriter
+	request  *http.Request
+	sid      string
+	handlers SessionHandlers
 }
 
 var defaultNewSessionHandlersFunc func() SessionHandlers
@@ -48,12 +48,12 @@ func NewSession(w http.ResponseWriter, r *http.Request, config Config) (*Session
 		return nil, err
 	}
 
-	sessionId := cookie.Value
-	if sessionId == "" {
-		sessionId = SessionCreateId()
+	sid := cookie.Value
+	if sid == "" {
+		sid = SessionCreateId()
 		http.SetCookie(w, &http.Cookie{
 			Name:   config.SessionName,
-			Value:  sessionId,
+			Value:  sid,
 			Domain: config.CookieDomain,
 			MaxAge: config.CookieLifetime,
 		})
@@ -61,16 +61,16 @@ func NewSession(w http.ResponseWriter, r *http.Request, config Config) (*Session
 
 	handlers := defaultNewSessionHandlersFunc()
 
-	err = handlers.SessionStart(config, sessionId)
+	err = handlers.SessionStart(config, sid)
 	if err != nil {
 		return nil, err
 	}
 
 	ret := &Session{
-		response:  w,
-		request:   r,
-		sessionId: sessionId,
-		handlers:  handlers,
+		response: w,
+		request:  r,
+		sid:      sid,
+		handlers: handlers,
 	}
 
 	return ret, nil
@@ -94,6 +94,10 @@ func (s *Session) Destory() error {
 
 func (s *Session) GC() {
 	s.handlers.SessionGC()
+}
+
+func (s *Session) GetSessionID() string {
+	return s.sid
 }
 
 func SessionEncodeName(name interface{}) string {
