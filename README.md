@@ -24,30 +24,30 @@ var sessionConfig = &session.Config{
 func SessionTestHandler(w http.ResponseWriter, r *http.Request) {
 	se, err := session.NewSession(w, r, sessionConfig)
 	if err != nil {
-		log.Println(err)
+		w.Write([]byte(err.Error()))
 		return
 	}
-	
-	name := "liexusong"
-	
-	err = se.Set("name", name)
+
+	err = se.Set("name", "liexusong")
 	if err != nil {
-		log.Println(err)
+		w.Write([]byte(err.Error()))
+		return
 	}
-	
-	var result string
-	
-	err = se.Get("name", &result)
+
+	var name string
+
+	err = se.Get("name", &name)
 	if err != nil {
-		log.Println(err)
+		w.Write([]byte(err.Error()))
+		return
 	}
-	
-	log.Println(result)
+
+	w.Write([]byte(name))
 }
 
 func main() {
-	http.HandleFunc("/", SessionTestHandler)
-	
+    http.HandleFunc("/", SessionTestHandler)
+
     err := http.ListenAndServe(":8080", nil)
     if err != nil {
         log.Fatal("ListenAndServe: ", err)
