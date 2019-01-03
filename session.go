@@ -1,3 +1,7 @@
+// Copyright 2019 liexusong. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package session
 
 import (
@@ -50,7 +54,7 @@ func NewSession(w http.ResponseWriter, r *http.Request, config Config) (*Session
 
 	sid := cookie.Value
 	if sid == "" {
-		sid = SessionCreateId()
+		sid = createSid()
 		http.SetCookie(w, &http.Cookie{
 			Name:   config.SessionName,
 			Value:  sid,
@@ -96,7 +100,7 @@ func (s *Session) GC() {
 	s.handlers.SessionGC()
 }
 
-func (s *Session) GetSessionID() string {
+func (s *Session) GetSid() string {
 	return s.sid
 }
 
@@ -119,7 +123,7 @@ func SessionDecodeValue(buffer []byte, value interface{}) error {
 	return gob.NewDecoder(bytes.NewReader(buffer)).Decode(value)
 }
 
-func SessionCreateId() string {
+func createSid() string {
 	randGen := rand.New(rand.NewSource(time.Now().Unix()))
 
 	v1 := randGen.Int63n(9999999999)
