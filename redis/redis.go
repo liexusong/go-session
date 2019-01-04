@@ -76,11 +76,11 @@ func (m *RedisSessionManager) reconnect() {
 	}
 
 	m.locker.Lock()
-	defer m.locker.Unlock()
 
 	m.redisConn.Close()
-
 	m.redisConn = redisConn
+
+	m.locker.Unlock()
 }
 
 func (m *RedisSessionManager) checkRedisConnectAlive() {
