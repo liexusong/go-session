@@ -35,7 +35,6 @@ type SessionHandlers interface {
 
 type SessionManagerHandlers interface {
 	CreateSession(string) SessionHandlers
-	GetReconnects() int64
 }
 
 type Session struct {
@@ -93,10 +92,6 @@ func (m *SessionManager) CreateSession(w http.ResponseWriter, r *http.Request) *
 		sid:      sid,
 		handlers: handlers,
 	}
-}
-
-func (m *SessionManager) GetReconnects() int64 {
-	return m.handlers.GetReconnects()
 }
 
 func (s *Session) Get(name interface{}, value interface{}) error {

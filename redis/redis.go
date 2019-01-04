@@ -118,10 +118,6 @@ func (m *RedisSessionManager) CreateSession(sid string) session.SessionHandlers 
 	}
 }
 
-func (m *RedisSessionManager) GetReconnects() int64 {
-	return atomic.LoadInt64(&m.reconnectTimes)
-}
-
 func (m *RedisSessionManager) doCommand(cmd string, args ...interface{}) (interface{}, error) {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
