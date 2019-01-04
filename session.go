@@ -159,5 +159,9 @@ func createSid() string {
 
 	randNum := fmt.Sprintf("%d.%d", v1|v2, time.Now().UnixNano())
 
-	return string(md5.New().Sum([]byte(randNum)))
+	md5Hash := md5.New()
+
+	md5Hash.Write([]byte(randNum))
+
+	return string(md5Hash.Sum(nil))
 }

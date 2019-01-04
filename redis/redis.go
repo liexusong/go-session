@@ -95,14 +95,14 @@ func (m *RedisSessionManager) checkRedisConnectAlive() {
 			if retries > 10 {
 				m.locker.RUnlock()
 				m.reconnect()
-				goto nextTime
+				goto nextCheck
 			}
 			goto tryAgain
 		}
 
 		m.locker.RUnlock()
 
-	nextTime:
+	nextCheck:
 		time.Sleep(time.Second)
 	}
 }
@@ -129,7 +129,7 @@ func (m *RedisSessionManager) doCommand(cmd string, args ...interface{}) (interf
 }
 
 func (s *RedisSession) updateSessionGCMaxLifetime() error {
-	_, err := s.manager.redisConn.Do("EXPIRE", s.sid, s.GCMaxLifetime)
+	_, err := s.manager.doCommand("EXPIRE", s.sid, s.GCMaxLifetime)
 	return err
 }
 
