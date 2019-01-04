@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -162,11 +163,8 @@ func createSid() string {
 	v1 := randGen.Int63n(9999999999)
 	v2 := randGen.Int63n(9999999999)
 
-	randNum := fmt.Sprintf("%d.%d", v1|v2, time.Now().UnixNano())
+	randNum := fmt.Sprintf("%d@%d", v1|v2, time.Now().UnixNano())
+	md5Hash := md5.Sum([]byte(randNum))
 
-	md5Hash := md5.New()
-
-	md5Hash.Write([]byte(randNum))
-
-	return string(md5Hash.Sum(nil))
+	return hex.EncodeToString(md5Hash[:])
 }

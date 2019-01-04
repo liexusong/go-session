@@ -8,10 +8,17 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	session "github.com/liexusong/go-session"
 	_ "github.com/liexusong/go-session/redis"
 )
+
+type User struct {
+	Name string
+	Age  int
+	Sex  string
+}
 
 var sessionConfig = session.Config{
 	SavePath:       "tcp://127.0.0.1:6379",
@@ -28,7 +35,13 @@ var sessionManager *session.SessionManager
 func setSessionHandler(w http.ResponseWriter, r *http.Request) {
 	se := sessionManager.CreateSession(w, r)
 
-	err := se.Set("name", "liexusong")
+	user := &User{
+		Name: "liexusong",
+		Age:  20,
+		Sex:  "man",
+	}
+
+	err := se.Set("name", user)
 	if err != nil {
 		w.Write([]byte(err.Error()))
 		return
@@ -40,15 +53,23 @@ func setSessionHandler(w http.ResponseWriter, r *http.Request) {
 func getSessionHandler(w http.ResponseWriter, r *http.Request) {
 	se := sessionManager.CreateSession(w, r)
 
-	var name string
+	var user User
 
-	err := se.Get("name", &name)
+	err := se.Get("name", &user)
 	if err != nil {
 		w.Write([]byte(err.Error()))
 		return
 	}
 
-	w.Write([]byte(name))
+	w.Write([]byte(fmt.Sprintf("%v", &user)))
+}
+
+func getSessionReconnectsHandler(w http.ResponseWriter, r *http.Request) {
+	times := sessionManager.GetReconnects()
+
+	buffer := strconv.FormatInt(int64(times), 10)
+
+	w.Write([]byte(buffer))
 }
 
 func main() {
@@ -56,12 +77,12 @@ func main() {
 
 	sessionManager, err = session.NewSessionManager(sessionConfig)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal("NewSessionManager:", err)
 	}
 
 	http.HandleFunc("/set", setSessionHandler)
 	http.HandleFunc("/get", getSessionHandler)
+	http.HandleFunc("/reconnects", getSessionReconnectsHandler)
 
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
