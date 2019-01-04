@@ -30,11 +30,11 @@ type SessionHandlers interface {
 	SessionSet(string, []byte) error
 	SessionDel(string) error
 	SessionDestory() error
-	SessionGC()
 }
 
 type SessionManagerHandlers interface {
 	CreateSession(string) SessionHandlers
+	SessionGC()
 }
 
 type Session struct {
@@ -94,6 +94,10 @@ func (m *SessionManager) CreateSession(w http.ResponseWriter, r *http.Request) *
 	}
 }
 
+func (m *SessionManager) GC() {
+	m.handlers.SessionGC()
+}
+
 func (s *Session) Get(name interface{}, value interface{}) error {
 	buffer, err := s.handlers.SessionGet(encodeName(name))
 	if err != nil {
@@ -123,10 +127,6 @@ func (s *Session) Destory() error {
 		MaxAge: int(time.Now().Unix() - 3600),
 	})
 	return s.handlers.SessionDestory()
-}
-
-func (s *Session) GC() {
-	s.handlers.SessionGC()
 }
 
 func (s *Session) GetSid() string {
