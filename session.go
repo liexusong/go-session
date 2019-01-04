@@ -121,6 +121,11 @@ func (s *Session) Del(name interface{}) error {
 }
 
 func (s *Session) Destory() error {
+	http.SetCookie(s.response, &http.Cookie{
+		Name:   s.sid,
+		Value:  "",
+		MaxAge: int(time.Now().Unix() - 3600),
+	})
 	return s.handlers.SessionDestory()
 }
 

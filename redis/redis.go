@@ -26,6 +26,7 @@ type RedisSession struct {
 	GCMaxLifetime int
 }
 
+// redis connection options
 var redisOptions = []redis.DialOption{
 	redis.DialConnectTimeout(time.Duration(5) * time.Second),
 	redis.DialReadTimeout(time.Duration(5) * time.Second),
