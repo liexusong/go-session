@@ -64,14 +64,6 @@ func getSessionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("%v", &user)))
 }
 
-func getSessionReconnectsHandler(w http.ResponseWriter, r *http.Request) {
-	times := sessionManager.GetReconnects()
-
-	buffer := strconv.FormatInt(int64(times), 10)
-
-	w.Write([]byte(buffer))
-}
-
 func main() {
 	var err error
 
@@ -82,7 +74,6 @@ func main() {
 
 	http.HandleFunc("/set", setSessionHandler)
 	http.HandleFunc("/get", getSessionHandler)
-	http.HandleFunc("/reconnects", getSessionReconnectsHandler)
 
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
